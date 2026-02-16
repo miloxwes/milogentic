@@ -1,0 +1,26 @@
+[tool.poetry]
+name = "agentic-app"
+version = "0.1.0"
+description = "Minimal agentic application (Agent + Tools + Memory + Rate limiting) with FastAPI. LLM is stubbed for local runs."
+authors = ["You <you@example.com>"]
+readme = "README.md"
+packages = [{ include = "agentic_app", from = "src" }]
+
+[tool.poetry.dependencies]
+python = ">=3.10,<3.13"
+fastapi = "^0.115.6"
+uvicorn = {extras = ["standard"], version = "^0.34.0"}
+pydantic = "^2.10.4"
+requests = "^2.32.3"
+openai = "^1.60.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3.4"
+ruff = "^0.8.4"
+
+[tool.poetry.scripts]
+agentic-app = "agentic_app.app:main"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
