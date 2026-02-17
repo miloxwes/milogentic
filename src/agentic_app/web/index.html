@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Agentic App</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <main class="layout">
+      <section class="hero">
+        <div class="kicker">Milo Agentic Workflow UI</div>
+        <h1>Run a request through your agent loop.</h1>
+        <p>Submit a goal, execute tools, and inspect each step returned by the backend.</p>
+      </section>
+
+      <section class="panel">
+        <form id="run-form" class="form-grid">
+          <label for="session_id">Session ID</label>
+          <input id="session_id" name="session_id" value="s1" required />
+
+          <label for="goal">Request for the agent</label>
+          <textarea id="goal" name="goal" required>Book me a flight from SFO to JFK next week under $500, prefer morning.</textarea>
+
+          <button id="submit-btn" type="submit">Submit Request</button>
+        </form>
+
+        <div id="status" class="status"></div>
+
+        <section id="result" class="result">
+          <article class="card">
+            <h3>Agent State Diagram</h3>
+            <div id="workflow-diagram" class="workflow-diagram">
+              <div class="wf-node" data-stage="submitted">Request Submitted</div>
+              <div class="wf-arrow">→</div>
+              <div class="wf-node" data-stage="agent_pickup">Agent Pickup</div>
+              <div class="wf-arrow">→</div>
+              <div class="wf-node" data-stage="context_ready">RAG + Memory</div>
+              <div class="wf-arrow">→</div>
+              <div class="wf-node" data-stage="llm_call">LLM Call</div>
+              <div class="wf-arrow">→</div>
+              <div class="wf-node" data-stage="llm_result">LLM Result</div>
+              <div class="wf-arrow">→</div>
+              <div class="wf-node" data-stage="tool_exec">Tool Execution</div>
+              <div class="wf-arrow">→</div>
+              <div class="wf-node" data-stage="final">Final Response</div>
+            </div>
+          </article>
+          <article class="card">
+            <h3>Final Response</h3>
+            <p id="final-text" class="final-text"></p>
+          </article>
+          <article class="card">
+            <h3>Tool Catalog (from Prompt)</h3>
+            <div id="tool-catalog" class="tool-catalog"></div>
+          </article>
+          <article class="card">
+            <h3>LLM Prompts and Results</h3>
+            <div id="llm-trace" class="llm-trace"></div>
+          </article>
+          <article class="card">
+            <h3>Execution Steps</h3>
+            <ol id="steps" class="timeline"></ol>
+          </article>
+        </section>
+      </section>
+    </main>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>

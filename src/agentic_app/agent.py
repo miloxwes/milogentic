@@ -42,17 +42,46 @@ class Agent:
         self.memory.add_event(session_id, "user", user_goal)
 
         steps: List[Dict[str, Any]] = []
-        for _ in range(max_iters):
+        for iteration in range(1, max_iters + 1):
             events = self.memory.get_recent(session_id, limit=100)
             rag_context = self._rag_retrieve(user_goal)
             tool_specs = [tool_spec(t) for t in self.tools.values()]
             memory_for_llm = [{"role": e.role, "content": e.content, "meta": e.meta} for e in events]
+            steps.append(
+                {
+                    "type": "llm_prompt",
+                    "iteration": iteration,
+                    "prompt": {
+                        "user_goal": user_goal,
+                        "memory_events": memory_for_llm,
+                        "tools": tool_specs,
+                        "rag_context": rag_context,
+                    },
+                }
+            )
 
             llm_resp: LLMResponse = self.llm.decide(
                 user_goal=user_goal,
                 memory_events=memory_for_llm,
                 tools=tool_specs,
                 rag_context=rag_context,
+            )
+            steps.append(
+                {
+                    "type": "llm_result",
+                    "iteration": iteration,
+                    "result": {
+                        "tool_call": (
+                            {
+                                "tool_name": llm_resp.tool_call.tool_name,
+                                "arguments": llm_resp.tool_call.arguments,
+                            }
+                            if llm_resp.tool_call
+                            else None
+                        ),
+                        "final_text": llm_resp.final_text,
+                    },
+                }
             )
 
             if llm_resp.final_text:

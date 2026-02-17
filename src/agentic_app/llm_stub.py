@@ -29,8 +29,6 @@ class LLMStub:
         rag_context: str,
     ) -> LLMResponse:
         # Very simple state machine based on what is already in memory.
-        seen = [e["role"] + ":" + e["content"] for e in memory_events]
-
         def has_tool(tool_name: str) -> bool:
             return any(
                 e.get("meta", {}).get("tool_name") == tool_name

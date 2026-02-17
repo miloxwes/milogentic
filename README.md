@@ -4,9 +4,24 @@ Minimal agentic app with:
 
 - Agent loop and tool-calling flow
 - FastAPI API endpoint
+- Separated frontend UI (HTML/CSS/JS static assets)
 - SQLite-backed memory
 - In-memory tool rate limiting
 - Stub LLM by default, optional Groq-backed LLM when `GROQ_API_KEY` is set
+
+## Project structure
+
+Backend:
+
+- `src/agentic_app/app.py` (FastAPI routes + static serving)
+- `src/agentic_app/agent.py` (agent loop, LLM orchestration, tool execution)
+- `src/agentic_app/tools.py` (tool specs + implementations)
+
+Frontend:
+
+- `src/agentic_app/web/index.html`
+- `src/agentic_app/web/static/styles.css`
+- `src/agentic_app/web/static/app.js`
 
 ## Prerequisites
 
@@ -40,6 +55,20 @@ Or use the project script entrypoint:
 ```bash
 uv run agentic-app
 ```
+
+Open the UI in your browser:
+
+```text
+http://127.0.0.1:8000/
+```
+
+UI includes:
+
+- Request form (`session_id`, `goal`)
+- Agent state diagram (submitted -> pickup -> rag/memory -> llm call -> llm result -> tool execution -> final)
+- Tool catalog (from prompt tool specs)
+- LLM prompt/result trace (expandable JSON tree)
+- Full execution steps (expandable JSON tree)
 
 Call the endpoint:
 
@@ -78,6 +107,14 @@ uv run python -m uvicorn agentic_app.app:app --reload --host 127.0.0.1 --port 80
 - Parameters: `agentic_app.app:app --reload --host 127.0.0.1 --port 8000`
 - Working directory: project root
 3. Start debug and set breakpoints in `src/agentic_app/agent.py`.
+
+## API notes
+
+`POST /agent/run` returns:
+
+- `session_id`
+- `final_text`
+- `steps` (includes `llm_prompt`, `llm_result`, tool outcomes, and final/error events)
 
 ## Optional Groq LLM
 
