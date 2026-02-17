@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
@@ -29,6 +31,13 @@ class LLMStub:
         rag_context: str,
     ) -> LLMResponse:
         # Very simple state machine based on what is already in memory.
+        available_tool_names = {t["name"] for t in tools}
+
+        has_amadeus_creds = bool(os.environ.get("AMADEUS_CLIENT_ID") and os.environ.get("AMADEUS_CLIENT_SECRET"))
+        search_tool_name = "search_flights_priceline"
+        if "search_flights_amadeus" in available_tool_names and has_amadeus_creds:
+            search_tool_name = "search_flights_amadeus"
+
         def has_tool(tool_name: str) -> bool:
             return any(
                 e.get("meta", {}).get("tool_name") == tool_name
@@ -44,10 +53,10 @@ class LLMStub:
                 )
             )
 
-        if not has_tool("search_flights_priceline"):
+        if not has_tool(search_tool_name):
             return LLMResponse(
                 tool_call=LLMToolCall(
-                    tool_name="search_flights_priceline",
+                    tool_name=search_tool_name,
                     arguments={
                         "origin": "SFO",
                         "destination": "JFK",
@@ -61,7 +70,7 @@ class LLMStub:
         if not has_tool("hold_booking"):
             last_search = None
             for e in reversed(memory_events):
-                if e.get("meta", {}).get("tool_name") == "search_flights_priceline":
+                if e.get("meta", {}).get("tool_name") == search_tool_name:
                     last_search = e.get("meta", {}).get("tool_result")
                     break
             options = (last_search or {}).get("options", [])

@@ -16,6 +16,7 @@ Backend:
 - `src/agentic_app/app.py` (FastAPI routes + static serving)
 - `src/agentic_app/agent.py` (agent loop, LLM orchestration, tool execution)
 - `src/agentic_app/tools.py` (tool specs + implementations)
+- `src/agentic_app/amadeus.py` (Amadeus auth + flight search client)
 
 Frontend:
 
@@ -69,6 +70,24 @@ UI includes:
 - Tool catalog (from prompt tool specs)
 - LLM prompt/result trace (expandable JSON tree)
 - Full execution steps (expandable JSON tree)
+
+## Real tool: Amadeus flight search
+
+`search_flights_amadeus` is now wired to the live Amadeus API.
+
+Set credentials before running:
+
+```bash
+export AMADEUS_CLIENT_ID=...
+export AMADEUS_CLIENT_SECRET=...
+# optional (defaults to test endpoint)
+export AMADEUS_BASE_URL=https://test.api.amadeus.com
+```
+
+Notes:
+
+- Without these env vars, calls to `search_flights_amadeus` fail with a clear error.
+- The mock `search_flights_priceline` tool is still present for local/demo fallback.
 
 Call the endpoint:
 

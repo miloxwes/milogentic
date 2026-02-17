@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, TypedDict
 
+from agentic_app.amadeus import AmadeusClient
 from agentic_app.rate_limit import RateLimit
 
 
@@ -81,6 +82,24 @@ def search_flights_priceline(args: Dict[str, Any]) -> Dict[str, Any]:
     return {"options": options}
 
 
+def search_flights_amadeus(args: Dict[str, Any]) -> Dict[str, Any]:
+    client = AmadeusClient()
+    result = client.search_flights(
+        origin=args["origin"],
+        destination=args["destination"],
+        depart_date=args["depart_date"],
+        return_date=args.get("return_date"),
+        adults=int(args.get("adults", 1)),
+        max_results=int(args.get("max_results", 10)),
+        non_stop=args.get("non_stop"),
+        currency_code=args.get("currency_code", "USD"),
+    )
+    max_price = args.get("max_price_usd")
+    if max_price is not None:
+        result["options"] = [o for o in result["options"] if o.get("price_usd", 0) <= max_price]
+    return result
+
+
 def check_calendar_freebusy(args: Dict[str, Any]) -> Dict[str, Any]:
     # Replace with Google Calendar later.
     return {
@@ -116,6 +135,31 @@ def build_tools() -> List[Tool]:
             },
             handler=check_calendar_freebusy,
             rate_limit=RateLimit(max_calls=10, window_seconds=60),
+        ),
+        Tool(
+            name="search_flights_amadeus",
+            description=(
+                "Search live flight offers using the Amadeus API. "
+                "Requires AMADEUS_CLIENT_ID and AMADEUS_CLIENT_SECRET."
+            ),
+            parameters_schema={
+                "type": "object",
+                "properties": {
+                    "origin": {"type": "string", "description": "Airport code, e.g. SFO"},
+                    "destination": {"type": "string", "description": "Airport code, e.g. JFK"},
+                    "depart_date": {"type": "string", "description": "YYYY-MM-DD"},
+                    "return_date": {"type": "string", "description": "YYYY-MM-DD"},
+                    "adults": {"type": "integer", "description": "Adult passengers count (default 1)"},
+                    "max_results": {"type": "integer", "description": "Maximum offers to return (default 10)"},
+                    "non_stop": {"type": "boolean", "description": "If true, only nonstop flights"},
+                    "currency_code": {"type": "string", "description": "Fare currency, default USD"},
+                    "max_price_usd": {"type": "integer", "description": "Optional local post-filter on USD fares"},
+                },
+                "required": ["origin", "destination", "depart_date"],
+            },
+            handler=search_flights_amadeus,
+            rate_limit=RateLimit(max_calls=5, window_seconds=60),
+            approx_cost_usd=0.01,
         ),
         Tool(
             name="search_flights_priceline",
