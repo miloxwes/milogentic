@@ -1,7 +1,8 @@
 from agentic_app.agent import build_agent
 
 
-def test_agent_runs_to_final_text(tmp_path):
+def test_agent_runs_to_final_text(tmp_path, monkeypatch):
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
     db_path = tmp_path / "memory.db"
     agent = build_agent(db_path=str(db_path))
     res = agent.run("s1", "Book me a flight SFO to JFK under $500.")

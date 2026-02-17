@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from datetime import date, timedelta
 
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
@@ -30,6 +31,10 @@ class LLMStub:
         tools: List[Dict[str, Any]],
         rag_context: str,
     ) -> LLMResponse:
+        today = date.today()
+        depart_date = (today + timedelta(days=7)).isoformat()
+        return_date = (today + timedelta(days=10)).isoformat()
+
         # Very simple state machine based on what is already in memory.
         available_tool_names = {t["name"] for t in tools}
 
@@ -49,7 +54,10 @@ class LLMStub:
             return LLMResponse(
                 tool_call=LLMToolCall(
                     tool_name="calendar_freebusy",
-                    arguments={"start_date": "2026-02-23", "end_date": "2026-03-01"},
+                    arguments={
+                        "start_date": (today + timedelta(days=6)).isoformat(),
+                        "end_date": (today + timedelta(days=14)).isoformat(),
+                    },
                 )
             )
 
@@ -60,8 +68,8 @@ class LLMStub:
                     arguments={
                         "origin": "SFO",
                         "destination": "JFK",
-                        "depart_date": "2026-02-24",
-                        "return_date": "2026-02-27",
+                        "depart_date": depart_date,
+                        "return_date": return_date,
                         "max_price_usd": 500,
                     },
                 )

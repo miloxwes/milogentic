@@ -7,6 +7,16 @@ const stepsNode = document.getElementById("steps");
 const llmTraceNode = document.getElementById("llm-trace");
 const workflowNode = document.getElementById("workflow-diagram");
 const toolCatalogNode = document.getElementById("tool-catalog");
+const sessionInput = document.getElementById("session_id");
+
+const buildSessionId = () => {
+  const randomPart = Math.random().toString(36).slice(2, 8);
+  return `web-${Date.now().toString(36)}-${randomPart}`;
+};
+
+if (sessionInput && (!sessionInput.value.trim() || sessionInput.value.trim() === "s1")) {
+  sessionInput.value = buildSessionId();
+}
 
 const isObjectLike = (value) => typeof value === "object" && value !== null;
 
@@ -135,7 +145,7 @@ form.addEventListener("submit", async (event) => {
   submitBtn.disabled = true;
 
   const payload = {
-    session_id: document.getElementById("session_id").value.trim(),
+    session_id: sessionInput.value.trim(),
     goal: document.getElementById("goal").value.trim(),
   };
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+from datetime import date, datetime
 
 from dataclasses import dataclass
 from typing import Any, Dict, List
@@ -28,15 +29,60 @@ class Agent:
         llm: LLMStub,
         tools: List[Tool],
         rate_limiter: InMemoryRateLimiter,
+        fallback_llm: LLMStub | None = None,
     ) -> None:
         self.memory = memory
         self.llm = llm
+        self.fallback_llm = fallback_llm
         self.tools = {t.name: t for t in tools}
         self.rate_limiter = rate_limiter
 
     def _rag_retrieve(self, user_goal: str) -> str:
         # Replace with vector DB retrieval later.
         return "User preferences: prefer direct flights, avoid redeye when possible."
+
+    def _parse_date_field(self, value: Any) -> date | None:
+        raw = str(value).strip()
+        if not raw:
+            return None
+        try:
+            return date.fromisoformat(raw)
+        except ValueError:
+            pass
+        if raw.endswith("Z"):
+            raw = raw[:-1] + "+00:00"
+        try:
+            return datetime.fromisoformat(raw).date()
+        except ValueError:
+            return None
+
+    def _validate_flight_search_args(self, args: Dict[str, Any]) -> str | None:
+        depart_raw = args.get("depart_date")
+        if not depart_raw:
+            return "Missing required depart_date."
+        depart_date = self._parse_date_field(depart_raw)
+        if depart_date is None:
+            return "Invalid depart_date format. Use YYYY-MM-DD."
+        args["depart_date"] = depart_date.isoformat()
+
+        today = date.today()
+        if depart_date < today:
+            return f"depart_date {depart_date.isoformat()} is in the past (today is {today.isoformat()})."
+
+        return_raw = args.get("return_date")
+        if not return_raw:
+            return None
+
+        return_date = self._parse_date_field(return_raw)
+        if return_date is None:
+            args.pop("return_date", None)
+            return None
+        args["return_date"] = return_date.isoformat()
+
+        if return_date < depart_date:
+            args.pop("return_date", None)
+            return None
+        return None
 
     def run(self, session_id: str, user_goal: str, max_iters: int = 20) -> AgentResult:
         self.memory.add_event(session_id, "user", user_goal)
@@ -60,12 +106,36 @@ class Agent:
                 }
             )
 
-            llm_resp: LLMResponse = self.llm.decide(
-                user_goal=user_goal,
-                memory_events=memory_for_llm,
-                tools=tool_specs,
-                rag_context=rag_context,
-            )
+            try:
+                llm_resp: LLMResponse = self.llm.decide(
+                    user_goal=user_goal,
+                    memory_events=memory_for_llm,
+                    tools=tool_specs,
+                    rag_context=rag_context,
+                )
+            except Exception as e:
+                can_fallback = (
+                    self.fallback_llm is not None
+                    and "rate limit" in str(e).lower()
+                )
+                if can_fallback:
+                    self.memory.add_event(
+                        session_id,
+                        "agent",
+                        f"Primary LLM failed ({e}); falling back to local stub.",
+                    )
+                    steps.append({"type": "llm_fallback", "error": str(e)})
+                    llm_resp = self.fallback_llm.decide(
+                        user_goal=user_goal,
+                        memory_events=memory_for_llm,
+                        tools=tool_specs,
+                        rag_context=rag_context,
+                    )
+                else:
+                    msg = f"LLM decision failed: {e}"
+                    self.memory.add_event(session_id, "agent", msg)
+                    steps.append({"type": "llm_error", "error": str(e)})
+                    return AgentResult(session_id=session_id, final_text=msg, steps=steps)
             steps.append(
                 {
                     "type": "llm_result",
@@ -112,13 +182,30 @@ class Agent:
                 steps.append({"type": "blocked", "tool": tool_name, "reason": msg})
                 return AgentResult(session_id=session_id, final_text=msg, steps=steps)
 
+            if tool_name in {"search_flights_amadeus", "search_flights_priceline"}:
+                validation_error = self._validate_flight_search_args(args)
+                if validation_error:
+                    msg = f"Blocked {tool_name}: {validation_error}"
+                    self.memory.add_event(session_id, "agent", msg, meta={"requested_args": args})
+                    steps.append({"type": "blocked", "tool": tool_name, "reason": msg})
+                    return AgentResult(session_id=session_id, final_text=msg, steps=steps)
+
             # Rate limiting
             if tool.rate_limit:
-                allowed = self.rate_limiter.allow(session_id, tool_name, tool.rate_limit)
-                if not allowed:
-                    msg = f"Rate limit exceeded for tool={tool_name}. Try again later or reduce calls."
+                decision = self.rate_limiter.allow(session_id, tool_name, tool.rate_limit)
+                if not decision.allowed:
+                    msg = (
+                        f"Rate limit exceeded for tool={tool_name}. "
+                        f"Retry in ~{decision.retry_after_seconds}s or use a new session_id."
+                    )
                     self.memory.add_event(session_id, "agent", msg)
-                    steps.append({"type": "rate_limited", "tool": tool_name})
+                    steps.append(
+                        {
+                            "type": "rate_limited",
+                            "tool": tool_name,
+                            "retry_after_seconds": decision.retry_after_seconds,
+                        }
+                    )
                     return AgentResult(session_id=session_id, final_text=msg, steps=steps)
 
             self.memory.add_event(
@@ -160,11 +247,19 @@ class Agent:
 def build_agent(db_path: str = "memory.db") -> Agent:
     memory = MemoryStore(db_path=db_path)
 
+    fallback_llm = None
     if os.environ.get("GROQ_API_KEY"):
         llm = GroqLLM()
+        fallback_llm = LLMStub()
     else:
         llm = LLMStub()
 
     tools = build_tools()
     limiter = InMemoryRateLimiter()
-    return Agent(memory=memory, llm=llm, tools=tools, rate_limiter=limiter)
+    return Agent(
+        memory=memory,
+        llm=llm,
+        tools=tools,
+        rate_limiter=limiter,
+        fallback_llm=fallback_llm,
+    )

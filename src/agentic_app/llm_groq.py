@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import json
 import os
+from datetime import date
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
-from openai import BadRequestError, OpenAI
+from openai import BadRequestError, OpenAI, RateLimitError
 
 
 @dataclass(frozen=True)
@@ -48,6 +49,14 @@ class GroqLLM:
         tools: List[Dict[str, Any]],
         rag_context: str,
     ) -> LLMResponse:
+        today_iso = date.today().isoformat()
+        available_tool_names = {t["name"] for t in tools}
+        preferred_search_tool = (
+            "search_flights_amadeus"
+            if "search_flights_amadeus" in available_tool_names
+            else "search_flights_priceline"
+        )
+
         # Convert our ToolSpec -> OpenAI tools schema
         openai_tools = [
             {
@@ -75,7 +84,9 @@ class GroqLLM:
         system = (
             "You are a task agent. If you need external data or actions, call a tool. "
             "Call at most one tool per step. When you are done, respond with a final answer. "
-            "Do not invent tool results."
+            "Do not invent tool results. "
+            f"Today's date is {today_iso}. Never call flight search tools with past dates. "
+            f"When searching flights, prefer {preferred_search_tool} when available."
         )
 
         user = (
@@ -105,6 +116,10 @@ class GroqLLM:
                     "https://console.groq.com/docs/deprecations."
                 ) from e
             raise
+        except RateLimitError as e:
+            raise RuntimeError(
+                "Groq API rate limit reached. Wait and retry, or reduce request frequency/token usage."
+            ) from e
 
         msg = resp.choices[0].message
 

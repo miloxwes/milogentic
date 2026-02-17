@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, TypedDict
 
@@ -121,7 +123,7 @@ def confirm_booking(args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def build_tools() -> List[Tool]:
-    return [
+    tools: List[Tool] = [
         Tool(
             name="calendar_freebusy",
             description="Get user's free time windows for a date range.",
@@ -162,24 +164,6 @@ def build_tools() -> List[Tool]:
             approx_cost_usd=0.01,
         ),
         Tool(
-            name="search_flights_priceline",
-            description="Search flights using a Priceline-like provider.",
-            parameters_schema={
-                "type": "object",
-                "properties": {
-                    "origin": {"type": "string", "description": "Airport code, e.g. SFO"},
-                    "destination": {"type": "string", "description": "Airport code, e.g. JFK"},
-                    "depart_date": {"type": "string", "description": "YYYY-MM-DD"},
-                    "return_date": {"type": "string", "description": "YYYY-MM-DD"},
-                    "max_price_usd": {"type": "integer", "description": "Maximum price in USD"},
-                },
-                "required": ["origin", "destination", "depart_date"],
-            },
-            handler=search_flights_priceline,
-            rate_limit=RateLimit(max_calls=5, window_seconds=60),
-            approx_cost_usd=0.01,
-        ),
-        Tool(
             name="hold_booking",
             description="Place a temporary hold on a selected flight option.",
             parameters_schema={
@@ -207,3 +191,28 @@ def build_tools() -> List[Tool]:
             rate_limit=RateLimit(max_calls=5, window_seconds=60),
         ),
     ]
+
+    has_amadeus_creds = bool(os.environ.get("AMADEUS_CLIENT_ID") and os.environ.get("AMADEUS_CLIENT_SECRET"))
+    if not has_amadeus_creds:
+        tools.append(
+            Tool(
+                name="search_flights_priceline",
+                description="Search flights using a Priceline-like provider.",
+                parameters_schema={
+                    "type": "object",
+                    "properties": {
+                        "origin": {"type": "string", "description": "Airport code, e.g. SFO"},
+                        "destination": {"type": "string", "description": "Airport code, e.g. JFK"},
+                        "depart_date": {"type": "string", "description": "YYYY-MM-DD"},
+                        "return_date": {"type": "string", "description": "YYYY-MM-DD"},
+                        "max_price_usd": {"type": "integer", "description": "Maximum price in USD"},
+                    },
+                    "required": ["origin", "destination", "depart_date"],
+                },
+                handler=search_flights_priceline,
+                rate_limit=RateLimit(max_calls=5, window_seconds=60),
+                approx_cost_usd=0.01,
+            )
+        )
+
+    return tools
